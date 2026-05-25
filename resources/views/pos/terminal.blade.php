@@ -78,7 +78,7 @@
 
             <div class="product-grid">
                 @foreach($products as $product)
-                    <div class="product-card" style="cursor:pointer;" data-id="{{ $product->id }}" data-name="{{ $product->name }}" data-category="{{ $product->category }}" data-price="{{ $product->price }}" data-stock="{{ $product->stock }}" data-sizes="{{ $product->sizes->pluck('size')->toJson() }}" onclick="openSizeModal(this)">
+                    <div class="product-card" style="cursor:pointer;" data-id="{{ $product->id }}" data-name="{{ $product->name }}" data-category="{{ $product->category }}" data-price="{{ $product->price }}" data-stock="{{ $product->stock }}" data-sizes="{{ $product->sizes->map(fn($s) => ['size' => $s->size, 'stock' => $s->stock])->toJson() }}" onclick="openSizeModal(this)">
                         <div class="product-card-image">
                             @if($product->image)
                                 <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
@@ -429,13 +429,23 @@ function openSizeModal(el) {
     var sizes = [];
 
     if (productSizes.length > 0) {
-        sizes = productSizes;
+        for (var j = 0; j < productSizes.length; j++) {
+            if (productSizes[j].stock > 0) {
+                sizes.push(productSizes[j].size);
+            }
+        }
     } else if (_ropaCats.indexOf(cat) !== -1) {
         sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
     } else if (_unitallaCats.indexOf(cat) !== -1) {
         sizes = ['Unitalla'];
     } else {
         sizes = ['22','22.5','23','23.5','24','24.5','25','25.5','26','26.5','27','27.5','28','28.5','29','29.5','30','30.5','31'];
+    }
+
+    if (sizes.length === 0) {
+        container.innerHTML = '<p style="color:var(--red);padding:12px 0;">No hay tallas disponibles con stock.</p>';
+        document.getElementById('sizeModal').style.display = 'flex';
+        return;
     }
 
     for (var i = 0; i < sizes.length; i++) {

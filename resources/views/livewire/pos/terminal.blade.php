@@ -1,21 +1,55 @@
 <?php
 
 use App\Models\Product;
+use App\Models\Brand;
+use App\Models\ProductSize;
 use Livewire\Volt\Component;
 
 new class extends Component {
     public string $search = '';
     public string $brandFilter = 'todos';
     public array $cart = [];
+    public ?int $selectingProductId = null;
+    public string $selectedSize = '';
 
-    public function addToCart(int $productId): void
+    public function openSizeSelector(int $productId): void
     {
-        $product = Product::find($productId);
-        if (!$product || $product->stock <= 0) return;
+        $this->selectingProductId = $productId;
+        $this->selectedSize = '';
+    }
 
-        $key = array_search($productId, array_column($this->cart, 'id'));
-        if ($key !== false) {
-            $this->cart[$key]['quantity']++;
+    public function closeSizeSelector(): void
+    {
+        $this->selectingProductId = null;
+        $this->selectedSize = '';
+    }
+
+    public function confirmAddToCart(): void
+    {
+        if (!$this->selectingProductId || !$this->selectedSize) return;
+
+        $product = Product::find($this->selectingProductId);
+        if (!$product) return;
+
+        $sizeRecord = ProductSize::where('product_id', $product->id)
+            ->where('size', $this->selectedSize)
+            ->where('stock', '>', 0)
+            ->first();
+
+        if (!$sizeRecord) return;
+
+        $existingKey = null;
+        foreach ($this->cart as $i => $item) {
+            if ($item['id'] === $product->id && $item['size'] === $this->selectedSize) {
+                $existingKey = $i;
+                break;
+            }
+        }
+
+        if ($existingKey !== null) {
+            if ($this->cart[$existingKey]['quantity'] < $sizeRecord->stock) {
+                $this->cart[$existingKey]['quantity']++;
+            }
         } else {
             $this->cart[] = [
                 'id' => $product->id,
@@ -24,9 +58,11 @@ new class extends Component {
                 'colorway' => $product->colorway,
                 'price' => (float) $product->price,
                 'quantity' => 1,
-                'size' => '27',
+                'size' => $this->selectedSize,
             ];
         }
+
+        $this->closeSizeSelector();
     }
 
     public function removeFromCart(int $index): void
@@ -49,7 +85,7 @@ new class extends Component {
 
     public function with(): array
     {
-        $query = Product::query();
+        $query = Product::with(['sizes'])->where('stock', '>', 0);
 
         if ($this->search) {
             $query->where('name', 'like', '%' . $this->search . '%');
@@ -59,12 +95,29 @@ new class extends Component {
             $query->where('brand', $this->brandFilter);
         }
 
+        $brands = Brand::orderBy('name')->pluck('name')->toArray();
+        array_unshift($brands, 'todos');
+
+        $selectingProduct = null;
+        $availableSizes = collect();
+        if ($this->selectingProductId) {
+            $selectingProduct = Product::find($this->selectingProductId);
+            if ($selectingProduct) {
+                $availableSizes = ProductSize::where('product_id', $selectingProduct->id)
+                    ->where('stock', '>', 0)
+                    ->orderBy('size')
+                    ->get();
+            }
+        }
+
         return [
             'products' => $query->get(),
-            'brands' => ['todos', 'Nike', 'Jordan', 'Adidas', 'New Balance'],
+            'brands' => $brands,
             'cartTotal' => $this->getCartTotal(),
             'cartCount' => $this->getCartCount(),
             'employee' => auth()->user(),
+            'selectingProduct' => $selectingProduct,
+            'availableSizes' => $availableSizes,
         ];
     }
 }; ?>
@@ -123,11 +176,15 @@ new class extends Component {
 
                 <div class="product-grid">
                     @foreach($products as $product)
-                        <div class="product-card" wire:click="addToCart({{ $product->id }})">
+                        <div class="product-card" wire:click="openSizeSelector({{ $product->id }})">
                             <div class="product-card-image">
-                                <div style="width:100%;height:100%;background:linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:32px;">
-                                    👟
-                                </div>
+                                @if($product->image)
+                                    <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                                @else
+                                    <div style="width:100%;height:100%;background:linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:32px;">
+                                        👟
+                                    </div>
+                                @endif
                                 <span class="brand-tag">{{ $product->brand }}</span>
                                 <span class="stock-tag {{ $product->stockUrgency() }}">{{ $product->stockLabel() }}</span>
                             </div>
@@ -195,5 +252,50 @@ new class extends Component {
                 @endif
             </div>
         </div>
+
+        {{-- Modal Seleccionar Talla --}}
+        @if($selectingProduct)
+            <div class="modal-overlay" wire:click.self="closeSizeSelector">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Seleccionar Talla</h2>
+                        <button class="modal-close" wire:click="closeSizeSelector">&times;</button>
+                    </div>
+                    <div class="modal-body" style="text-align:center;">
+                        <div>
+                            <strong style="font-size:16px;">{{ $selectingProduct->name }}</strong>
+                            <div style="color:var(--accent-gold);font-size:15px;margin-top:4px;">${{ number_format($selectingProduct->price, 0, '.', ',') }}</div>
+                        </div>
+
+                        @if($availableSizes->count() > 0)
+                            <div class="size-grid">
+                                @foreach($availableSizes as $sizeOption)
+                                    <label>
+                                        <input type="radio" name="size" class="size-radio" value="{{ $sizeOption->size }}" wire:model="selectedSize">
+                                        <span class="size-option">{{ $sizeOption->size }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+
+                            <button
+                                class="btn btn-primary"
+                                style="width:100%;padding:14px;font-size:15px;margin-top:8px;{{ !$selectedSize ? 'opacity:0.4;cursor:not-allowed;' : '' }}"
+                                wire:click="confirmAddToCart"
+                                @if(!$selectedSize) disabled @endif
+                            >
+                                + Agregar al carrito
+                            </button>
+                        @else
+                            <div style="color:var(--red);padding:20px 0;">
+                                No hay tallas disponibles para este producto.
+                            </div>
+                            <button class="btn btn-secondary" style="width:100%;padding:14px;" wire:click="closeSizeSelector">
+                                Cerrar
+                            </button>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </x-layouts.pos>
