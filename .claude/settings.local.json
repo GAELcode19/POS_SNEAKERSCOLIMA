@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php --version)",
+      "Bash(php artisan *)",
+      "Bash(rm -v resources/views/livewire/pos/dashboard.blade.php resources/views/livewire/pos/inventory.blade.php resources/views/livewire/pos/team.blade.php resources/views/livewire/pos/terminal.blade.php resources/views/components/layouts/pos.blade.php)",
+      "Bash(rmdir resources/views/livewire/pos)",
+      "Bash(xargs echo \"rutas pos OK:\")",
+      "Bash(php -m)",
+      "Bash(composer require *)",
+      "Bash(php -r 'require '\\\\''vendor/autoload.php'\\\\''; $g = new Picqer\\\\Barcode\\\\BarcodeGeneratorSVG\\(\\); echo substr\\($g->getBarcode\\('\\\\''AD-CICO-NE-846'\\\\'', $g::TYPE_CODE_128\\), 0, 60\\);')",
+      "Bash(xargs echo \"Rutas pos totales:\")",
+      "Bash(php -l app/Services/WhatsAppNotifier.php)",
+      "Bash(php -l app/Http/Controllers/LayawayController.php)",
+      "Bash(php -l app/Http/Controllers/PosController.php)",
+      "Bash(php artisan tinker '--execute= *)"
+    ]
+  }
+}
